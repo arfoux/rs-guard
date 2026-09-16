@@ -39,6 +39,11 @@ opencode plugin add github:arfoux/rs-guard
 
 Requires OpenCode V2 (`@opencode/plugin` v2). The plugin id is `rs-guard`.
 
+> On OpenCode V1? Use the best-effort port
+> [`github:arfoux/rs-guard-v1`](https://github.com/arfoux/rs-guard-v1)
+> (`@opencode-ai/plugin` v1 API has no request/retry hooks — it strips stale
+> reasoning state and shows a guidance toast, but cannot auto-retry).
+
 ## Verify
 
 1. Open a fresh session on the failing model.
