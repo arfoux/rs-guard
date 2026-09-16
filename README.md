@@ -31,7 +31,7 @@ Local part ids are never touched, so tool-call / tool-result pairing is safe.
 
 ```sh
 # from GitHub
-opencode plugin add github:<you>/rs-guard
+opencode plugin add github:arfoux/rs-guard
 
 # or local path
 # opencode.jsonc: { "plugins": ["./path/to/rs-guard"] }
