@@ -39,7 +39,7 @@ function isContinuationError(message: string): boolean {
 }
 
 // Server-issued continuation ids live in metadata keys only — never touch the
-// local `id` of a part, so tool-call/tool-result pairing stays intact.
+// local `id` of a part, so tool-call/tool-result pairing stays intact
 const SERVER_ID_KEYS = new Set([
   "itemid",
   "item_id",
