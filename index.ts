@@ -1,27 +1,35 @@
 import { Plugin } from "@opencode/plugin"
 
-// Self-heal for Responses-style reasoning continuation failures:
-//
+// rs-guard: self-heal for Responses-style reasoning continuation failures on
+// OpenCode V2 (`@opencode/plugin`).
+
+// Errors handled:
 // - `reasoning encrypted_content was not issued to this caller`
 // - `invalid_encrypted_content` / `could not be verified`
 // - `Referenced reasoning item 'rs_..:rs_..' was not found or has expired`
-//
-// Seen on Gateway Console free models (e.g. muse-spark-1.3-contributor-free,
-// 2-3 message sessions) and on Responses API with `store: false` after a few
-// tool turns. Same family of fixes as upstream PR #28678 (don't replay `rs_*`
-// ids when stateless) and PR #29000 (summary splitting, encrypted replay,
-// `item_reference` when stored).
-//
-// Strategy:
-// 1. `context`/`compaction`/`generate`: force stateless full replay
-//    (drop `previous_response_id`, force `store: false`), drop
-//    `include: reasoning.encrypted_content`, always strip server-issued ids
-//    from metadata, keep at most 1 newest encrypted blob.
-// 2. `retry`: on matching errors, flag the session so the next request goes
-//    out with NO reasoning at all (fresh reasoning), then allow 1 retry.
 
+// Seen on Gateway Console free models (e.g. muse-spark-1.3-contributor-free
+// failing on message 2-3 of a fresh session) and on Responses API with
+// `store: false` after a few tool turns. Same family as upstream
+// anomalyco/opencode PR #28678 (don't replay `rs_*` ids when stateless) and
+// PR #29000 (summary splitting, encrypted replay, `item_reference` when stored).
+
+// How it works:
+// 1. `context`/`compaction`/`generate`: force stateless full replay (drop
+//    `previous_response_id`, force `store: false`), drop
+//    `include: reasoning.encrypted_content`, strip server-issued ids from
+//    every part, keep at most 1 newest encrypted blob.
+// 2. `retry`: on a matching error, flag the session so the next request goes
+//    out with NO reasoning at all (fresh reasoning), one retry with `delay: 0`.
+
+// Invariant: server-issued continuation ids live in metadata keys only; the
+// local `id` of a part is never touched, so tool-call/tool-result pairing
+// stays intact.
+
+// Storage flag: marks sessions whose next request goes out with no reasoning.
 const FLAG_PREFIX = "rs-guard/strip/"
 
+// Matches the reasoning-continuation error class (case-insensitive).
 function isContinuationError(message: string): boolean {
   const m = (message ?? "").toLowerCase()
   return (
@@ -38,8 +46,8 @@ function isContinuationError(message: string): boolean {
   )
 }
 
-// Server-issued continuation ids live in metadata keys only — never touch the
-// local `id` of a part, so tool-call/tool-result pairing stays intact
+// Metadata keys carrying server-issued continuation ids (invariant above:
+// local `id` is never touched).
 const SERVER_ID_KEYS = new Set([
   "itemid",
   "item_id",
@@ -49,12 +57,13 @@ const SERVER_ID_KEYS = new Set([
   "responseid",
 ])
 
+// Type guard for the `prefix_payload` shape (`rs_…`, `msg_…`, `resp_…`).
 function isServerItemId(value: unknown): boolean {
   return typeof value === "string" && /^[A-Za-z]+_[A-Za-z0-9][A-Za-z0-9:_-]*$/.test(value)
 }
 
-// Remove ONLY server ids (leave encrypted blobs alone) — used on the normal
-// path so lowering can't build an expired `item_reference`.
+// Normal path: remove ONLY server ids (leave encrypted blobs alone) so
+// lowering can't build an expired `item_reference`.
 function stripServerIdsOnly(obj: any): boolean {
   if (!obj || typeof obj !== "object") return false
   let stripped = false
@@ -76,7 +85,7 @@ function stripServerIdsOnly(obj: any): boolean {
   return stripped
 }
 
-// Remove encrypted blobs AND server ids from one part/message object.
+// Self-heal path: remove encrypted blobs AND server ids from one part/message.
 function stripEncryptedKeys(obj: any): boolean {
   if (!obj || typeof obj !== "object") return false
   let stripped = false
@@ -115,6 +124,7 @@ function stripEncryptedKeys(obj: any): boolean {
   return stripped
 }
 
+// True if any nested key containing `encrypt` holds a non-empty string blob.
 function hasEncrypted(obj: any): boolean {
   if (!obj || typeof obj !== "object") return false
   const seen = new Set<any>()
@@ -131,6 +141,7 @@ function hasEncrypted(obj: any): boolean {
   return false
 }
 
+// Unwrap V2 message shapes (`parts` / `content` / bare part) to the parts array.
 function getParts(msg: any): any[] | undefined {
   if (!msg || typeof msg !== "object") return undefined
   if (Array.isArray((msg as any).parts)) return (msg as any).parts
@@ -141,6 +152,8 @@ function getParts(msg: any): any[] | undefined {
   return undefined
 }
 
+// Drop `include: reasoning.encrypted_content`, including provider-scoped nests
+// (e.g. `options.openai.include`).
 function stripInclude(options: any) {
   if (!options || typeof options !== "object") return
   if (Array.isArray((options as any).include)) {
@@ -158,6 +171,7 @@ function stripInclude(options: any) {
 export default Plugin.define({
   id: "rs-guard",
   async setup(ctx) {
+    // Self-heal mode: drop ALL reasoning parts; normal path trims older blobs.
     const stripAllReasoning = (messages: any[]) => {
       for (const msg of messages) {
         const parts = getParts(msg)
