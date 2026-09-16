@@ -1,0 +1,11 @@
+{
+  "name": "opencode-rs-guard",
+  "version": "1.0.0",
+  "description": "Self-heal for Responses-style reasoning continuation failures (expired rs_* ids, rejected encrypted_content)",
+  "license": "MIT",
+  "type": "module",
+  "keywords": ["opencode", "opencode-plugin", "responses-api", "reasoning"],
+  "dependencies": {
+    "@opencode/plugin": "^2.0.3"
+  }
+}
