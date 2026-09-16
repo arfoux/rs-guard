@@ -4,7 +4,34 @@
   "description": "Self-heal for Responses-style reasoning continuation failures (expired rs_* ids, rejected encrypted_content)",
   "license": "MIT",
   "type": "module",
-  "keywords": ["opencode", "opencode-plugin", "responses-api", "reasoning"],
+  "main": "index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "index.ts",
+    "LICENSE",
+    "README.md"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "responses-api",
+    "reasoning",
+    "encrypted-content",
+    "self-heal"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arfoux/rs-guard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arfoux/rs-guard/issues"
+  },
+  "homepage": "https://github.com/arfoux/rs-guard#readme",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "@opencode/plugin": "^2.0.3"
   }
